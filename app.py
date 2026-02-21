@@ -44,7 +44,7 @@ def load_text_file(filepath: str):
                 source="family.txt"
             )
         )
-    return docs
+    return docs, content
 
 
 
@@ -73,14 +73,12 @@ class SimpleTfidfRAG:
 
 # ================== PROMPT BUILDER ==================
 def build_prompt(context: str, question: str) -> str:
-    return f"""
-You are a strict question-answering assistant.
-
-Rules:
-- Answer ONLY using the context below.
-- Do NOT use outside knowledge.
-- If the answer is not in the context, say:
-  "I don't know based on the provided data."
+    return f""" You are a strict question-answering assistant. 
+    Rules: 
+    - Answer ONLY using the context below. 
+    - Do NOT use outside knowledge. 
+    - If the answer is not in the context, 
+    say: "I don't know based on the provided data."
 
 Context:
 {context}
@@ -112,7 +110,7 @@ def call_ollama(prompt: str) -> str:
 def main():
     print("=== RAG using Text File with Phi-3 ===")
 
-    docs = load_text_file("family.txt")
+    docs, full_text = load_text_file("family.txt")
     rag = SimpleTfidfRAG(docs)
 
     while True:
@@ -121,7 +119,32 @@ def main():
         if query.lower() == "exit":
             break
 
-        # 1️⃣ RETRIEVE using plain query
+        # ===============================
+        # 1️⃣ CHECK IF IT IS A COUNT QUERY
+        # ===============================
+        if "count" in query.lower():
+
+            # Remove the word "count"
+            cleaned_query = query.lower().replace("count", "").strip()
+
+            # Remove single or double quotes manually
+            cleaned_query = cleaned_query.replace("'", "").replace('"', "")
+
+            # The remaining text is the word to count
+            word = cleaned_query.strip()
+
+            # Literal word split (no regex)
+            words = full_text.lower().split()
+
+            count = words.count(word)
+
+            print(f"\nThe word '{word}' appears {count} times in the document.")
+            continue
+
+
+        # ===============================
+        # 2️⃣ OTHERWISE → NORMAL RAG
+        # ===============================
         results = rag.retrieve(query)
 
         if not results:
@@ -134,12 +157,8 @@ def main():
             print(f"\n[{i}] Score: {score:.3f}")
             print(doc.text[:200] + "...")
 
-        # 2️⃣ BUILD CONTEXT
         context = "\n".join([doc.text for doc, _ in results])
-        # 3️⃣ BUILD PROMPT
         prompt = build_prompt(context, query)
-        
-        # 4️⃣ GENERATE ANSWER
         answer = call_ollama(prompt)
 
         print("\nAnswer:")
